@@ -5,11 +5,14 @@
  */
 
 import assert from 'node:assert';
+import path from 'node:path';
 import {afterEach, describe, it} from 'node:test';
+import {pathToFileURL} from 'node:url';
 
 import sinon from 'sinon';
 
 import {NetworkFormatter} from '../src/formatters/NetworkFormatter.js';
+import {TextSnapshot} from '../src/TextSnapshot.js';
 import type {HTTPResponse} from '../src/third_party/index.js';
 import type {TraceResult} from '../src/trace-processing/parse.js';
 
@@ -30,9 +33,9 @@ describe('McpContext', () => {
             value="Input"
           />`,
       );
-      await context.createTextSnapshot(context.getSelectedMcpPage());
+      page.textSnapshot = await TextSnapshot.create(page);
       assert.ok(await page.getElementByUid('1_1'));
-      await context.createTextSnapshot(context.getSelectedMcpPage());
+      page.textSnapshot = await TextSnapshot.create(page);
       await page.getElementByUid('1_1');
     });
   });
@@ -90,7 +93,7 @@ describe('McpContext', () => {
       async (_response, context) => {
         const page = await context.newPage();
         await context.createPagesSnapshot();
-        assert.ok(context.getDevToolsPage(page.pptrPage));
+        assert.ok(page.devToolsPage);
       },
       {
         autoOpenDevTools: true,
@@ -102,7 +105,9 @@ describe('McpContext', () => {
       // Page 1: set content and snapshot
       const page1 = context.getSelectedMcpPage();
       await page1.pptrPage.setContent(html`<button>Page1 Button</button>`);
-      await context.createTextSnapshot(page1, false, undefined);
+      page1.textSnapshot = await TextSnapshot.create(page1, {
+        verbose: false,
+      });
 
       // Capture a uid from page1's snapshot (snapshotId=1, button is node 1)
       const page1Uid = '1_1';
@@ -113,7 +118,9 @@ describe('McpContext', () => {
       const page2 = await context.newPage();
       context.selectPage(page2);
       await page2.pptrPage.setContent(html`<button>Page2 Button</button>`);
-      await context.createTextSnapshot(page2, false, undefined);
+      page2.textSnapshot = await TextSnapshot.create(page2, {
+        verbose: false,
+      });
 
       // Page 2 is now selected. Page 1's uid should still resolve.
       const node = context.getAXNodeByUid(page1Uid);
@@ -206,6 +213,48 @@ describe('McpContext', () => {
       t.assert.snapshot?.(JSON.stringify(result.structuredContent, null, 2));
 
       fromStub.restore();
+    });
+  });
+
+  it('can store and retrieve roots', async () => {
+    await withMcpContext(async (_response, context) => {
+      const roots = [{uri: 'file:///test', name: 'test'}];
+      context.setRoots(roots);
+      assert.deepEqual(context.roots(), roots);
+    });
+  });
+
+  it('validatePath allows paths within roots', async () => {
+    await withMcpContext(async (_response, context) => {
+      const workspacePath = path.resolve('/tmp/workspace');
+      const roots = [
+        {uri: pathToFileURL(workspacePath).href, name: 'workspace'},
+      ];
+      context.setRoots(roots);
+      // Valid path within root
+      context.validatePath(path.join(workspacePath, 'test.txt'));
+      context.validatePath(workspacePath);
+
+      // Invalid path outside root
+      const outsidePath = path.resolve('/tmp/outside.txt');
+      assert.throws(() => context.validatePath(outsidePath), /Access denied/);
+    });
+  });
+
+  it('validatePath allows all paths if roots are undefined (legacy)', async () => {
+    await withMcpContext(async (_response, context) => {
+      context.setRoots(undefined);
+      context.validatePath(path.resolve('/tmp/anywhere.txt'));
+    });
+  });
+
+  it('validatePath denies all paths if roots list is empty', async () => {
+    await withMcpContext(async (_response, context) => {
+      context.setRoots([]);
+      assert.throws(
+        () => context.validatePath(path.resolve('/tmp/anywhere.txt')),
+        /Access denied/,
+      );
     });
   });
 });

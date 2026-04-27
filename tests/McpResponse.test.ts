@@ -16,7 +16,10 @@ import type {ParsedArguments} from '../src/bin/chrome-devtools-mcp-cli-options.j
 import type {McpContext} from '../src/McpContext.js';
 import type {McpResponse} from '../src/McpResponse.js';
 import {replaceHtmlElementsWithUids} from '../src/McpResponse.js';
-import type {JSONSchema7Definition} from '../src/third_party/index.js';
+import type {
+  Extension,
+  JSONSchema7Definition,
+} from '../src/third_party/index.js';
 import {
   closePage,
   listPages,
@@ -156,7 +159,7 @@ describe('McpResponse', () => {
   });
 
   it('saves snapshot to file and returns structured content', async t => {
-    const filePath = join(tmpdir(), 'test-screenshot.png');
+    const filePath = join(tmpdir(), 'test-snapshot.txt');
     try {
       await withMcpContext(async (response, context) => {
         const page = context.getSelectedPptrPage();
@@ -955,22 +958,31 @@ describe('extensions', () => {
 
       response.resetResponseLineForTesting();
       // Testing with extensions
-      context.listExtensions = () => [
-        {
-          id: 'id1',
-          name: 'Extension 1',
-          version: '1.0',
-          isEnabled: true,
-          path: '/path/to/ext1',
-        },
-        {
-          id: 'id2',
-          name: 'Extension 2',
-          version: '2.0',
-          isEnabled: false,
-          path: '/path/to/ext2',
-        },
-      ];
+      context.listExtensions = async () =>
+        Promise.resolve(
+          new Map<string, Extension>([
+            [
+              'id1',
+              {
+                id: 'id1',
+                name: 'Extension 1',
+                version: '1.0',
+                enabled: true,
+                path: '/path/to/ext1',
+              } as Extension,
+            ],
+            [
+              'id2',
+              {
+                id: 'id2',
+                name: 'Extension 2',
+                version: '2.0',
+                enabled: false,
+                path: '/path/to/ext2',
+              } as Extension,
+            ],
+          ]),
+        );
       response.setListExtensions();
       const {content, structuredContent} = await response.handle(
         'test',
@@ -1181,7 +1193,7 @@ describe('inPage tools', () => {
 
   it('includes in-page tools in navigate_page response', async () => {
     await testIncludesInPageTools(async (response, context) => {
-      await navigatePage.handler(
+      await navigatePage().handler(
         {
           params: {type: 'url', url: 'about:blank'},
           page: context.getSelectedMcpPage(),
@@ -1197,7 +1209,7 @@ describe('inPage tools', () => {
       // Workaround to ensure the test environment's new page contain in-page tools
       sinon.stub(context, 'newPage').resolves(context.getSelectedMcpPage());
 
-      await newPage.handler(
+      await newPage().handler(
         {
           params: {url: 'about:blank'},
         },
@@ -1453,5 +1465,132 @@ describe('replaceHtmlElementsWithUids', () => {
     } else {
       assert.fail('Unexpected schema structure');
     }
+  });
+});
+
+describe('webmcp', () => {
+  async function testIncludesWebmcpTools(
+    t: it.TestContext,
+    parseArguments: ParsedArguments,
+    handlerAction: (
+      response: McpResponse,
+      context: McpContext,
+    ) => Promise<void>,
+    toolName: string,
+  ) {
+    await withMcpContext(
+      async (response, context) => {
+        response.setListWebMcpTools();
+
+        await handlerAction(response, context);
+
+        const page = context.getSelectedMcpPage().pptrPage;
+        await page.setContent(
+          html`<form
+            toolname="test_tool"
+            tooldescription="A test tool"
+          ></form>`,
+        );
+
+        const {content, structuredContent} = await response.handle(
+          toolName,
+          context,
+        );
+        assert.ok(getTextContent(content[0]));
+        t.assert.snapshot?.(getTextContent(content[0]));
+        t.assert.snapshot?.(
+          JSON.stringify(
+            stabilizeStructuredContent(structuredContent),
+            null,
+            2,
+          ),
+        );
+      },
+      {args: ['--enable-features=WebMCPTesting,DevToolsWebMCPSupport']},
+      parseArguments,
+    );
+  }
+
+  it('includes webmcp tools in list_pages response', async t => {
+    await testIncludesWebmcpTools(
+      t,
+      {experimentalWebmcp: true} as ParsedArguments,
+      async (response, context) => {
+        await listPages().handler({params: {}}, response, context);
+      },
+      'list_pages',
+    );
+  });
+
+  it('includes webmcp tools in select_page response', async t => {
+    await testIncludesWebmcpTools(
+      t,
+      {experimentalWebmcp: true} as ParsedArguments,
+      async (response, context) => {
+        const pageId =
+          context.getPageId(context.getSelectedMcpPage().pptrPage) ?? 1;
+        await selectPage.handler({params: {pageId}}, response, context);
+      },
+      'select_page',
+    );
+  });
+
+  it('includes webmcp tools in navigate_page response', async t => {
+    await testIncludesWebmcpTools(
+      t,
+      {experimentalWebmcp: true} as ParsedArguments,
+      async (response, context) => {
+        await navigatePage().handler(
+          {
+            params: {type: 'url', url: 'about:blank'},
+            page: context.getSelectedMcpPage(),
+          },
+          response,
+          context,
+        );
+      },
+      'navigate_page',
+    );
+  });
+
+  it('list no webmcp tools if there are none', async t => {
+    await withMcpContext(
+      async (response, context) => {
+        response.setListWebMcpTools();
+        const {content, structuredContent} = await response.handle(
+          'test',
+          context,
+        );
+        assert.ok(getTextContent(content[0]));
+        t.assert.snapshot?.(getTextContent(content[0]));
+        t.assert.snapshot?.(
+          JSON.stringify(
+            stabilizeStructuredContent(structuredContent),
+            null,
+            2,
+          ),
+        );
+      },
+      {args: ['--enable-features=WebMCPTesting,DevToolsWebMCPSupport']},
+      {experimentalWebmcp: true} as ParsedArguments,
+    );
+  });
+
+  it('list no webmcp tools if experimentalWebmcp is false', async t => {
+    await testIncludesWebmcpTools(
+      t,
+      {experimentalWebmcp: false} as ParsedArguments,
+      async (response, context) => {
+        await navigatePage().handler(
+          {
+            params: {type: 'url', url: 'about:blank'},
+            page: context.getSelectedMcpPage(),
+          },
+          response,
+          context,
+        );
+      },
+      'navigate_page',
+    );
   });
 });

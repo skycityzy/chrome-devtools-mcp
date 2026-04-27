@@ -49,6 +49,7 @@ export const startTrace = definePageTool({
     filePath: filePathSchema,
   },
   handler: async (request, response, context) => {
+    context.validatePath(request.params.filePath);
     if (context.isRunningPerformanceTrace()) {
       response.appendResponseLine(
         'Error: a performance trace is already running. Use performance_stop_trace to stop it. Only one trace can be running at any given time.',
@@ -126,6 +127,7 @@ export const stopTrace = definePageTool({
     filePath: filePathSchema,
   },
   handler: async (request, response, context) => {
+    context.validatePath(request.params.filePath);
     if (!context.isRunningPerformanceTrace()) {
       return;
     }
@@ -197,7 +199,11 @@ async function stopTracingAndAppendOutput(
           });
         });
       }
-      const file = await context.saveFile(dataToWrite, filePath);
+      const file = await context.saveFile(
+        dataToWrite,
+        filePath,
+        filePath.endsWith('.gz') ? '.json.gz' : '.json',
+      );
       response.appendResponseLine(
         `The raw trace data was saved to ${file.filename}.`,
       );

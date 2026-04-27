@@ -8,19 +8,17 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-export async function saveTemporaryFile(
-  data: Uint8Array<ArrayBufferLike>,
-  filename: string,
-): Promise<{filepath: string}> {
-  try {
-    const dir = await fs.mkdtemp(
-      path.join(os.tmpdir(), 'chrome-devtools-mcp-'),
-    );
+export async function getTempFilePath(filename: string) {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'chrome-devtools-mcp-'));
 
-    const filepath = path.join(dir, filename);
-    await fs.writeFile(filepath, data);
-    return {filepath};
-  } catch (err) {
-    throw new Error('Could not save a file', {cause: err});
-  }
+  const filepath = path.join(dir, filename);
+  return filepath;
+}
+
+export function ensureExtension(
+  filepath: string,
+  extension: `.${string}`,
+): string {
+  const ext = path.extname(filepath);
+  return filepath.slice(0, filepath.length - ext.length) + extension;
 }
