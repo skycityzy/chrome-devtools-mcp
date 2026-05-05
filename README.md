@@ -477,7 +477,7 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 
 <!-- BEGIN AUTO GENERATED TOOLS -->
 
-- **Input automation** (9 tools)
+- **Input automation** (10 tools)
   - [`click`](docs/tool-reference.md#click)
   - [`drag`](docs/tool-reference.md#drag)
   - [`fill`](docs/tool-reference.md#fill)
@@ -487,6 +487,7 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
   - [`press_key`](docs/tool-reference.md#press_key)
   - [`type_text`](docs/tool-reference.md#type_text)
   - [`upload_file`](docs/tool-reference.md#upload_file)
+  - [`click_at`](docs/tool-reference.md#click_at)
 - **Navigation automation** (6 tools)
   - [`close_page`](docs/tool-reference.md#close_page)
   - [`list_pages`](docs/tool-reference.md#list_pages)
@@ -497,21 +498,35 @@ If you run into any issues, checkout our [troubleshooting guide](./docs/troubles
 - **Emulation** (2 tools)
   - [`emulate`](docs/tool-reference.md#emulate)
   - [`resize_page`](docs/tool-reference.md#resize_page)
-- **Performance** (4 tools)
+- **Performance** (3 tools)
   - [`performance_analyze_insight`](docs/tool-reference.md#performance_analyze_insight)
   - [`performance_start_trace`](docs/tool-reference.md#performance_start_trace)
   - [`performance_stop_trace`](docs/tool-reference.md#performance_stop_trace)
-  - [`take_memory_snapshot`](docs/tool-reference.md#take_memory_snapshot)
 - **Network** (2 tools)
   - [`get_network_request`](docs/tool-reference.md#get_network_request)
   - [`list_network_requests`](docs/tool-reference.md#list_network_requests)
-- **Debugging** (6 tools)
+- **Debugging** (10 tools)
   - [`evaluate_script`](docs/tool-reference.md#evaluate_script)
   - [`get_console_message`](docs/tool-reference.md#get_console_message)
   - [`lighthouse_audit`](docs/tool-reference.md#lighthouse_audit)
   - [`list_console_messages`](docs/tool-reference.md#list_console_messages)
   - [`take_screenshot`](docs/tool-reference.md#take_screenshot)
   - [`take_snapshot`](docs/tool-reference.md#take_snapshot)
+  - [`execute_webmcp_tool`](docs/tool-reference.md#execute_webmcp_tool)
+  - [`list_webmcp_tools`](docs/tool-reference.md#list_webmcp_tools)
+  - [`screencast_start`](docs/tool-reference.md#screencast_start)
+  - [`screencast_stop`](docs/tool-reference.md#screencast_stop)
+- **Memory** (4 tools)
+  - [`take_memory_snapshot`](docs/tool-reference.md#take_memory_snapshot)
+  - [`get_memory_snapshot_details`](docs/tool-reference.md#get_memory_snapshot_details)
+  - [`get_nodes_by_class`](docs/tool-reference.md#get_nodes_by_class)
+  - [`load_memory_snapshot`](docs/tool-reference.md#load_memory_snapshot)
+- **Extensions** (5 tools)
+  - [`install_extension`](docs/tool-reference.md#install_extension)
+  - [`list_extensions`](docs/tool-reference.md#list_extensions)
+  - [`reload_extension`](docs/tool-reference.md#reload_extension)
+  - [`trigger_extension_action`](docs/tool-reference.md#trigger_extension_action)
+  - [`uninstall_extension`](docs/tool-reference.md#uninstall_extension)
 
 <!-- END AUTO GENERATED TOOLS -->
 
@@ -558,7 +573,7 @@ The Chrome DevTools MCP server supports the following configuration option:
 - **`--channel`**
   Specify a different Chrome channel that should be used. The default is the stable channel version.
   - **Type:** string
-  - **Choices:** `stable`, `canary`, `beta`, `dev`
+  - **Choices:** `canary`, `dev`, `beta`, `stable`
 
 - **`--logFile`/ `--log-file`**
   Path to a file to write debug logs to. Set the env variable `DEBUG` to `*` to enable verbose logs. Useful for submitting bug reports.
@@ -584,6 +599,14 @@ The Chrome DevTools MCP server supports the following configuration option:
   Exposes experimental screencast tools (requires ffmpeg). Install ffmpeg https://www.ffmpeg.org/download.html and ensure it is available in the MCP server PATH.
   - **Type:** boolean
 
+- **`--experimentalFfmpegPath`/ `--experimental-ffmpeg-path`**
+  Path to ffmpeg executable for screencast recording.
+  - **Type:** string
+
+- **`--experimentalWebmcp`/ `--experimental-webmcp`**
+  Set to true to enable debugging WebMCP tools. Requires Chrome 149+ with the following flags: `--enable-features=WebMCPTesting,DevToolsWebMCPSupport`
+  - **Type:** boolean
+
 - **`--chromeArg`/ `--chrome-arg`**
   Additional arguments for Chrome. Only applies when Chrome is launched by chrome-devtools-mcp.
   - **Type:** array
@@ -606,6 +629,11 @@ The Chrome DevTools MCP server supports the following configuration option:
   Set to false to exclude tools related to network.
   - **Type:** boolean
   - **Default:** `true`
+
+- **`--categoryExtensions`/ `--category-extensions`**
+  Set to true to include tools related to extensions. Note: This feature is currently only supported with a pipe connection. autoConnect, browserUrl, and wsEndpoint are not supported with this feature until 149 will be released.
+  - **Type:** boolean
+  - **Default:** `false`
 
 - **`--performanceCrux`/ `--performance-crux`**
   Set to false to disable sending URLs from performance traces to CrUX API to get field performance data.

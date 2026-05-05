@@ -42,6 +42,49 @@ function handleActionError(error: unknown, uid: string) {
   );
 }
 
+async function selectNativeSelectOption(handle: ElementHandle<Element>) {
+  const selectHandle = await handle.evaluateHandle(node => {
+    if (!(node instanceof HTMLOptionElement)) {
+      return null;
+    }
+
+    const select = node.closest('select');
+    if (!select || select.multiple || select.disabled || node.disabled) {
+      return null;
+    }
+
+    const parentElement = node.parentElement;
+    if (
+      parentElement instanceof HTMLOptGroupElement &&
+      parentElement.disabled
+    ) {
+      return null;
+    }
+
+    return select;
+  });
+  try {
+    const select = selectHandle.asElement() as ElementHandle<Element> | null;
+    if (!select) {
+      return false;
+    }
+
+    const valueHandle = await handle.getProperty('value');
+    try {
+      const value = await valueHandle.jsonValue();
+      if (typeof value !== 'string') {
+        return false;
+      }
+      await select.asLocator().fill(value);
+    } finally {
+      void valueHandle.dispose();
+    }
+    return true;
+  } finally {
+    void selectHandle.dispose();
+  }
+}
+
 export const click = definePageTool({
   name: 'click',
   description: `Clicks on the provided element`,
@@ -58,11 +101,22 @@ export const click = definePageTool({
     dblClick: dblClickSchema,
     includeSnapshot: includeSnapshotSchema,
   },
+  blockedByDialog: true,
   handler: async (request, response) => {
     const uid = request.params.uid;
     const handle = await request.page.getElementByUid(uid);
+    const aXNode = request.page.getAXNodeByUid(uid);
+    const shouldSelectNativeOption =
+      !request.params.dblClick && aXNode?.role === 'option';
     try {
       await request.page.waitForEventsAfterAction(async () => {
+        if (
+          shouldSelectNativeOption &&
+          (await selectNativeSelectOption(handle))
+        ) {
+          return;
+        }
+
         await handle.asLocator().click({
           count: request.params.dblClick ? 2 : 1,
         });
@@ -89,7 +143,7 @@ export const clickAt = definePageTool({
   annotations: {
     category: ToolCategory.INPUT,
     readOnlyHint: false,
-    conditions: ['computerVision'],
+    conditions: ['experimentalVision'],
   },
   schema: {
     x: zod.number().describe('The x coordinate'),
@@ -97,6 +151,7 @@ export const clickAt = definePageTool({
     dblClick: dblClickSchema,
     includeSnapshot: includeSnapshotSchema,
   },
+  blockedByDialog: true,
   handler: async (request, response) => {
     const page = request.page;
     await page.waitForEventsAfterAction(async () => {
@@ -130,6 +185,7 @@ export const hover = definePageTool({
       ),
     includeSnapshot: includeSnapshotSchema,
   },
+  blockedByDialog: true,
   handler: async (request, response) => {
     const uid = request.params.uid;
     const handle = await request.page.getElementByUid(uid);
@@ -233,6 +289,7 @@ export const fill = definePageTool({
     value: zod.string().describe('The value to fill in'),
     includeSnapshot: includeSnapshotSchema,
   },
+  blockedByDialog: true,
   handler: async (request, response, context) => {
     const page = request.page;
     await page.waitForEventsAfterAction(async () => {
@@ -261,6 +318,7 @@ export const typeText = definePageTool({
     text: zod.string().describe('The text to type'),
     submitKey: submitKeySchema,
   },
+  blockedByDialog: true,
   handler: async (request, response) => {
     const page = request.page;
     await page.waitForEventsAfterAction(async () => {
@@ -289,6 +347,7 @@ export const drag = definePageTool({
     to_uid: zod.string().describe('The uid of the element to drop into'),
     includeSnapshot: includeSnapshotSchema,
   },
+  blockedByDialog: true,
   handler: async (request, response) => {
     const fromHandle = await request.page.getElementByUid(
       request.params.from_uid,
@@ -330,6 +389,7 @@ export const fillForm = definePageTool({
       .describe('Elements from snapshot to fill out.'),
     includeSnapshot: includeSnapshotSchema,
   },
+  blockedByDialog: true,
   handler: async (request, response, context) => {
     const page = request.page;
     for (const element of request.params.elements) {
@@ -365,8 +425,10 @@ export const uploadFile = definePageTool({
     filePath: zod.string().describe('The local path of the file to upload'),
     includeSnapshot: includeSnapshotSchema,
   },
-  handler: async (request, response) => {
+  blockedByDialog: true,
+  handler: async (request, response, context) => {
     const {uid, filePath} = request.params;
+    context.validatePath(filePath);
     const handle = (await request.page.getElementByUid(
       uid,
     )) as ElementHandle<HTMLInputElement>;
@@ -414,6 +476,7 @@ export const pressKey = definePageTool({
       ),
     includeSnapshot: includeSnapshotSchema,
   },
+  blockedByDialog: true,
   handler: async (request, response) => {
     const page = request.page;
     const tokens = parseKey(request.params.key);
